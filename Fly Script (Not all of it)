@@ -1,0 +1,102 @@
+      if flying then
+         -- Stop flying if already flying
+         flying = false
+         Button.Name = "Fly - OFF"
+         
+         -- Remove BodyVelocity and BodyGyro when turning off fly
+         if bodyVelocity then
+            bodyVelocity:Destroy()
+         end
+         if bodyGyro then
+            bodyGyro:Destroy()
+         end
+
+         -- Reset humanoid state and stop movement
+         humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
+      else
+         -- Start flying if not already flying
+         flying = true
+         Button.Name = "Fly - ON"
+         
+         -- Add BodyVelocity and BodyGyro to start flight
+         bodyVelocity = Instance.new("BodyVelocity", humanoidRootPart)
+         bodyVelocity.MaxForce = Vector3.new(1e6, 1e6, 1e6)
+         bodyVelocity.Velocity = currentVelocity
+
+         bodyGyro = Instance.new("BodyGyro", humanoidRootPart)
+         bodyGyro.MaxTorque = Vector3.new(1e6, 1e6, 1e6)
+         bodyGyro.CFrame = humanoidRootPart.CFrame
+
+         -- Set humanoid to physics mode to prevent other animations
+         humanoid:ChangeState(Enum.HumanoidStateType.Physics)
+      end
+
+      -- Handle key press for movement (only when flying is enabled)
+      game:GetService("UserInputService").InputBegan:Connect(function(input, gameProcessed)
+         if gameProcessed then return end
+
+         if input.UserInputType == Enum.UserInputType.Keyboard then
+            -- Track active keys for movement
+            if flying then
+               if input.KeyCode == Enum.KeyCode.W or input.KeyCode == Enum.KeyCode.A or 
+                  input.KeyCode == Enum.KeyCode.S or input.KeyCode == Enum.KeyCode.D or
+                  input.KeyCode == Enum.KeyCode.Space or input.KeyCode == Enum.KeyCode.LeftShift then
+                  activeKeys[input.KeyCode] = true
+               end
+            end
+         end
+      end)
+
+      -- Stop tracking key when released
+      game:GetService("UserInputService").InputEnded:Connect(function(input, gameProcessed)
+         if gameProcessed then return end
+
+         if input.UserInputType == Enum.UserInputType.Keyboard then
+            activeKeys[input.KeyCode] = nil
+         end
+      end)
+
+      -- Handle movement while flying (if flying is enabled)
+      game:GetService("RunService").Heartbeat:Connect(function()
+         if not flying then return end -- Don't process movement if flying is off
+
+         local direction = Vector3.zero
+         local camera = workspace.CurrentCamera
+
+         -- Movement is based on camera direction (ignoring vertical tilt)
+         local flatLookVector = Vector3.new(camera.CFrame.LookVector.X, 0, camera.CFrame.LookVector.Z).Unit
+         local flatRightVector = Vector3.new(camera.CFrame.RightVector.X, 0, camera.CFrame.RightVector.Z).Unit
+
+         -- Adjust direction based on key presses
+         if activeKeys[Enum.KeyCode.W] then
+            direction += flatLookVector
+         end
+         if activeKeys[Enum.KeyCode.S] then
+            direction -= flatLookVector
+         end
+         if activeKeys[Enum.KeyCode.A] then
+            direction -= flatRightVector
+         end
+         if activeKeys[Enum.KeyCode.D] then
+            direction += flatRightVector
+         end
+         if activeKeys[Enum.KeyCode.Space] then
+            direction += Vector3.new(0, 1, 0)
+         end
+         if activeKeys[Enum.KeyCode.LeftShift] then
+            direction -= Vector3.new(0, 1, 0)
+         end
+
+         -- Smooth velocity adjustment for better flying
+         if direction.Magnitude > 0 then
+            currentVelocity = currentVelocity:Lerp(direction.Unit * flightSpeed, smoothingFactor)
+         else
+            currentVelocity = currentVelocity:Lerp(Vector3.zero, smoothingFactor)
+         end
+
+         -- Smooth rotation with Lerp
+         bodyGyro.CFrame = bodyGyro.CFrame:Lerp(camera.CFrame, smoothingFactor)
+
+         -- Apply the movement to the character's BodyVelocity
+         bodyVelocity.Velocity = currentVelocity
+      end)
